@@ -275,3 +275,145 @@ LEFT JOIN spendings USING (user_id)
 - Примеры реальных бизнес-кейсов с решениями и комментариями
  
  
+#### Дополнительное задание 2
+
+--Анализ активности пользователей на платформе по дням недели и времени суток
+
+--SQL запрос--
+WITH all_activities AS (
+    SELECT 
+        user_id,
+        created_at,
+        'coderun' AS activity_type
+    FROM coderun
+    UNION ALL
+    SELECT 
+        user_id,
+        created_at,
+        'codesubmit' AS activity_type
+    FROM codesubmit
+    UNION ALL
+    SELECT 
+        user_id,
+        created_at,
+        'teststart' AS activity_type
+    FROM teststart
+)
+SELECT 
+    -- Час активности
+    EXTRACT(HOUR FROM created_at) AS hour_of_day,
+    COUNT(*) AS total_activities
+FROM all_activities
+GROUP BY hour_of_day
+ORDER BY hour_of_day
+
+--Анализ активности по дням и времени суток
+WITH all_activities AS (
+    SELECT created_at FROM coderun
+    UNION ALL
+    SELECT created_at FROM codesubmit
+    UNION ALL
+    SELECT created_at FROM teststart
+)
+SELECT 
+    -- День недели (с названием)
+    CASE 
+        WHEN EXTRACT(DOW FROM created_at) = 0 THEN 'Sunday'
+        WHEN EXTRACT(DOW FROM created_at) = 1 THEN 'Monday'
+        WHEN EXTRACT(DOW FROM created_at) = 2 THEN 'Tuesday'
+        WHEN EXTRACT(DOW FROM created_at) = 3 THEN 'Wednesday'
+        WHEN EXTRACT(DOW FROM created_at) = 4 THEN 'Thursday'
+        WHEN EXTRACT(DOW FROM created_at) = 5 THEN 'Friday'
+        WHEN EXTRACT(DOW FROM created_at) = 6 THEN 'Saturday'
+    END AS day_of_week,   
+    EXTRACT(HOUR FROM created_at) AS hour_of_day, -- Час активности    
+    COUNT(*) AS total_actions,  -- Общее количество активностей   
+    ROUND(
+        COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 
+        2
+    ) AS percent_of_total     -- Доля от общего числа (для нормировки)
+FROM all_activities
+GROUP BY day_of_week, hour_of_day
+ORDER BY 
+    EXTRACT(DOW FROM MIN(created_at)), -- Сортировка по порядку дней недели
+    hour_of_day
+
+--Построение графика 
+
+--Python код--
+
+# импорт библиотек
+import pandas as pd
+import matplotlib.pyplot as plt
+# загружаем таблицу активности пользователей на платформе
+df = pd.read_csv("D:/SF EDUCATION/Кейс по курсу бизнес анализ/Дипломный проект по бизнес аналитике Щетко О.Н/Tables/Активность по дням недели и времени суток.csv", sep=',')
+# проверяем загруженную таблицу
+df.head()
+# убираем кавычки из названий столбцов
+df.columns = ['day_of_week', 'hour_of_day', 'total_actions']
+df
+# преобразуем столбец 'hour_of_day' в целочисленный тип
+df['hour_of_day'] = df['hour_of_day'].astype(int)
+# проверяем результат преобразования
+print(df.dtypes)
+print(df.info())
+print(df.head())
+# устанавливаем порядок дней недели с понедельника
+weekday_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+# преобразуем столбец day_of_week в категорию с указанным порядком
+df['day_of_week'] = pd.Categorical(df['day_of_week'], categories=weekday_order, ordered=True)
+# преобразуем данные: группируем по дням недели и часам, суммируя действия
+df_grouped = df.groupby(['day_of_week', 'hour_of_day'])['total_actions'].sum().reset_index()
+# проверяем результат группировки
+print(df_grouped.head())
+# строим тепловой график активности пользователей на платформе по дням недели и времени суток
+plt.figure(figsize=(12, 6))
+sns.heatmap(
+    df_grouped.pivot(index='day_of_week', columns='hour_of_day', values='total_actions'),
+    cmap='coolwarm',
+    annot=False,
+    cbar_kws={'label': 'Total Actions'}
+)
+plt.title('График распределения посещений по дням недели и времени суток')
+plt.xlabel('Час дня')
+plt.ylabel('День недели')
+plt.show()
+
+На основе анализа активности пользователей по дням недели и времени суток можно определить оптимальные интервалы для релизов нового функционала:
+Анализ активности:
+•	Пиковые часы:
+ -	Вторник, среда, четверг 12:00-21:00 — высокая активность, особенно 
+ -	Пятница 10:00-20:00 — стабильная активность с увеличением к вечеру.
+ -	Суббота 10:00-21:00 — высокий уровень активности, особенно с 12:00 до 19:00.
+ -	Воскресенье 10:00-21:00 — активность держится стабильно весь день.
+ -	Минимальная активность наблюдается ночью (0:00-6:00) и ранним утром (до 9:00).
+Оптимальное время для релизов:
+1.	Ночь (02:00–06:00)
+ 	Минимальное количество пользователей активно на платформе, что снижает вероятность массовых технических сбоев.
+ 	Можно проводить запланированные обновления без существенного влияния на пользователей.
+2.	Утро (06:00–09:00)
+ 	Достаточно низкий трафик, но более высокий, чем ночью.
+ 	Хороший вариант для небольших релизов и исправлений.
+3.	Альтернативный вариант — поздний вечер (22:00–01:00)
+ 	Активность пользователей снижается, но платформа ещё используется.
+ 	Подходит для обновлений, которые не требуют немедленного вмешательства пользователей.
+Рекомендации:
+✔ Релизы крупных обновлений лучше проводить с 02:00 до 06:00, когда минимальная нагрузка. 
+✔ Минорные исправления можно выкатывать ранним утром (06:00–09:00). 
+✔ Тестирование перед массовым релизом можно делать поздним вечером (22:00–01:00). 
+✔ Пиковые периоды активности лучше использовать для мониторинга стабильности и получения обратной связи.
+
+Оптимальные дни для релизов
+Понедельник, Вторник, Среда
+ 	Эти дни имеют высокую активность днём и вечером, но утром наблюдается спад, что делает их удобными для релизов.
+ 	Рекомендуемое время: 02:00–09:00.
+Четверг и Пятница
+  	Активность возрастает к концу недели, но ночью и ранним утром остаётся низкой.
+ 	Рекомендуемое время: 02:00–07:00.
+Суббота и Воскресенье
+  	Высокая активность пользователей в течение дня.
+  	Лучше избегать масштабных релизов, но минорные можно делать до 06:00.
+Вывод
+ Оптимальное время для крупных обновлений: 02:00–06:00 в понедельник, вторник или четверг.
+ Минорные исправления: 06:00–09:00 в понедельник-пятницу. 
+Тестирование на активной аудитории: 22:00–01:00 в будние дни.
